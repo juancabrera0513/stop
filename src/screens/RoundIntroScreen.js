@@ -14,6 +14,7 @@ export default function RoundIntroScreen({ navigation }) {
   const {
     player,
     bot,
+    bots,
     roundNumber,
     totalRounds,
     currentLetter,
@@ -25,7 +26,7 @@ export default function RoundIntroScreen({ navigation }) {
     navigation.replace("Game");
   };
 
-  if (!player || !bot || !currentLetter) {
+  if (!player || (!bot && (!bots || bots.length === 0)) || !currentLetter) {
     return (
       <ImageBackground
         source={require("../../assets/images/stop-bg.png")}
@@ -47,6 +48,20 @@ export default function RoundIntroScreen({ navigation }) {
       : difficulty === "medium"
       ? "Normal"
       : "Fácil";
+
+  const botsArray = bots && bots.length > 0 ? bots : bot ? [bot] : [];
+  const botsCount = botsArray.length;
+
+  let vsLine = "";
+  if (botsCount === 0) {
+    vsLine = player.name;
+  } else if (botsCount === 1) {
+    vsLine = `${player.name} ` + " " + "vs" + " " + botsArray[0].name;
+  } else if (botsCount === 2) {
+    vsLine = `${player.name} vs ${botsArray[0].name} y ${botsArray[1].name}`;
+  } else {
+    vsLine = `${player.name} vs ${botsCount} CPUs`;
+  }
 
   return (
     <ImageBackground
@@ -77,6 +92,13 @@ export default function RoundIntroScreen({ navigation }) {
                   CPU: {difficultyLabel}
                 </Text>
               </View>
+              {botsCount > 1 && (
+                <View style={styles.badgeSecondary}>
+                  <Text style={styles.badgeSecondaryText}>
+                    {botsCount} CPUs
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -91,12 +113,10 @@ export default function RoundIntroScreen({ navigation }) {
             {/* Duelo */}
             <View style={styles.vsBox}>
               <Text style={styles.vsTitle}>Duelo</Text>
-              <Text style={styles.vsText}>
-                {player.name}{" "}
-                <Text style={styles.vsHighlight}>vs</Text> {bot.name}
-              </Text>
+              <Text style={styles.vsText}>{vsLine}</Text>
               <Text style={styles.vsSubText}>
-                La CPU jugará en modo <Text style={styles.vsSubStrong}>{difficultyLabel}</Text>.
+                Las CPUs jugarán en modo{" "}
+                <Text style={styles.vsSubStrong}>{difficultyLabel}</Text>.
               </Text>
             </View>
 
@@ -141,12 +161,12 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: "transparent", // respetamos el color original del background
+    backgroundColor: "transparent",
   },
   container: {
     paddingHorizontal: 24,
     paddingBottom: 32,
-    paddingTop: 110, // baja todo para que no se vea pegado arriba
+    paddingTop: 110,
   },
   center: {
     flex: 1,
@@ -273,9 +293,6 @@ const styles = StyleSheet.create({
     color: "#f9fafb",
     fontWeight: "600",
     textAlign: "center",
-  },
-  vsHighlight: {
-    color: "#f97316",
   },
   vsSubText: {
     marginTop: 4,

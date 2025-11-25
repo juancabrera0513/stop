@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ImageBackground,
 } from "react-native";
 import { useGame } from "../context/GameContext";
 
@@ -28,18 +29,18 @@ export default function FinalResultsScreen({ navigation }) {
   };
 
   const handlePlayAgain = () => {
+    // Nueva partida, misma lógica de 1 jugador vs CPUs, desde la pantalla de setup
     resetGame();
     navigation.reset({
       index: 0,
-      routes: [{ name: "Home" }],
+      routes: [{ name: "SinglePlayerSetup" }],
     });
   };
 
   const handleSuddenDeath = () => {
-    // Usamos el nombre del jugador humano detectado en el marcador
     const currentPlayers = players || [];
-    const sortedForSudden = [...currentPlayers];
     const statsForSudden = computePlayerStats(currentPlayers, roundHistory);
+    const sortedForSudden = [...currentPlayers];
 
     sortedForSudden.sort((a, b) =>
       comparePlayersWithTiebreakers(a, b, statsForSudden)
@@ -52,12 +53,14 @@ export default function FinalResultsScreen({ navigation }) {
 
     const playerName = humanFromSorted.name || "Jugador";
     const diff = difficulty || "easy";
+    const botCount = currentPlayers.filter((p) => p.isBot).length || 1;
 
     resetGame();
     startSinglePlayer({
       playerName,
       rounds: 1,
       difficultyLevel: diff,
+      numBots: botCount,
     });
 
     navigation.reset({
@@ -68,40 +71,43 @@ export default function FinalResultsScreen({ navigation }) {
 
   if (!players || players.length === 0) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyText}>No hay resultados para mostrar.</Text>
-        <TouchableOpacity style={styles.btnPrimary} onPress={handleBackHome}>
-          <Text style={styles.btnPrimaryText}>Volver al inicio</Text>
-        </TouchableOpacity>
-      </View>
+      <ImageBackground
+        source={require("../../assets/images/stop-bg.png")}
+        style={styles.bg}
+        imageStyle={styles.bgImage}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.center}>
+            <Text style={styles.emptyText}>
+              No hay resultados para mostrar.
+            </Text>
+            <TouchableOpacity
+              style={styles.btnPrimary}
+              onPress={handleBackHome}
+            >
+              <Text style={styles.btnPrimaryText}>Volver al inicio</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ImageBackground>
     );
   }
 
-  // Stats por jugador (rondas ganadas, mejor ronda, correctas, vacías)
   const statsByPlayer = computePlayerStats(players, roundHistory);
-
-  // Ordenamos jugadores usando tiebreakers
   const sorted = [...players].sort((a, b) =>
     comparePlayersWithTiebreakers(a, b, statsByPlayer)
   );
-
   const winner = sorted[0];
 
-  // 🚨 AHORA human y cpu se sacan SIEMPRE de la lista con score actualizado
-  const human =
-    sorted.find((p) => !p.isBot) || sorted[0];
-  const cpu =
-    sorted.find((p) => p.isBot) || null;
+  const human = sorted.find((p) => !p.isBot) || sorted[0];
+  const roundsPlayed = totalRounds ?? roundHistory.length;
 
-  // ¿Hay empate real en primer lugar (ni siquiera tiebreakers los separan)?
   const topGroup = sorted.filter(
     (p) => comparePlayersWithTiebreakers(p, winner, statsByPlayer) === 0
   );
   const isTieForFirst = topGroup.length > 1;
-
   const isHumanWinner = !isTieForFirst && winner.id === human.id;
 
-  // Diferencia de puntos (informativo)
   const scoreDiff =
     sorted.length > 1 ? winner.score - sorted[1].score : 0;
 
@@ -112,200 +118,204 @@ export default function FinalResultsScreen({ navigation }) {
     emptyAnswers: 0,
   };
 
-  const cpuStats = cpu
-    ? statsByPlayer[cpu.id] || {
-        roundsWon: 0,
-        bestRoundScore: 0,
-        correctAnswers: 0,
-        emptyAnswers: 0,
-      }
-    : null;
-
-  const roundsPlayed = totalRounds ?? roundHistory.length;
-
-  // Mensaje de header según tiebreaker
+  // Mensaje principal (sin explicar Sudden ni “puedes intentar…”)
   let mainTitle = "Resultados finales";
   let mainSubtitle = "";
   let icon = "🏆";
 
   if (isTieForFirst) {
     icon = "🤝";
-    mainTitle = "Empate";
-    mainSubtitle =
-      "Ambos jugadores quedaron iguales incluso después de los tiebreakers. Puedes decidirlo en una ronda Sudden Death.";
+    mainTitle = "Empate en el marcador";
+    mainSubtitle = "Hay varios jugadores con el mismo puntaje.";
   } else if (isHumanWinner) {
     icon = "🏆";
-    mainTitle = "¡Ganaste la partida!";
-    mainSubtitle = "Superaste al CPU usando los criterios de desempate.";
+    mainTitle = "¡Victoria!";
+    mainSubtitle = "Ganaste la partida.";
   } else {
     icon = "🤖";
-    mainTitle = "El CPU ganó esta vez";
-    mainSubtitle = "Te superó usando los criterios de desempate.";
+    mainTitle = "Las CPUs ganaron";
+    mainSubtitle = "Quedaste por debajo en el marcador.";
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header principal */}
-      <Text style={styles.title}>{mainTitle}</Text>
-      <Text style={styles.subtitleHeader}>{mainSubtitle}</Text>
-
-      {/* Card de ganador / empate */}
-      <View style={styles.winnerCard}>
-        <Text style={styles.trophy}>{icon}</Text>
-
-        {!isTieForFirst && (
-          <>
-            <Text style={styles.winnerName}>{winner.name}</Text>
-            <Text style={styles.winnerScore}>
-              {winner.score} pts
-              {sorted.length > 1 && (
-                <Text style={styles.scoreDiff}>
-                  {" "}
-                  · Diferencia marcador: +{scoreDiff}
-                </Text>
-              )}
-            </Text>
-          </>
-        )}
-
-        {isTieForFirst && (
-          <View style={{ marginBottom: 4 }}>
-            {topGroup.map((p) => (
-              <Text
-                key={p.id || p.name}
-                style={styles.tiePlayerName}
-              >
-                {p.name} — {p.score} pts
-              </Text>
-            ))}
+    <ImageBackground
+      source={require("../../assets/images/stop-bg.png")}
+      style={styles.bg}
+      imageStyle={styles.bgImage}
+    >
+      <View style={styles.overlay}>
+        <View style={styles.container}>
+          {/* Header principal */}
+          <View style={styles.headerCard}>
+            <Text style={styles.title}>{mainTitle}</Text>
+            {!!mainSubtitle && (
+              <Text style={styles.subtitleHeader}>{mainSubtitle}</Text>
+            )}
           </View>
-        )}
 
-        <Text style={styles.roundInfo}>
-          Rondas jugadas: {roundsPlayed}
-        </Text>
+          {/* Card de ganador / empate (glass dark) */}
+          <View style={styles.winnerCard}>
+            <Text style={styles.trophy}>{icon}</Text>
 
-        <Text style={styles.tiebreakerInfo}>
-          Tiebreakers usados (en orden):{" "}
-          <Text style={styles.tiebreakerHighlight}>
-            Puntaje total → Rondas ganadas → Mejor ronda → Más respuestas
-            correctas
-          </Text>
-        </Text>
-      </View>
+            {!isTieForFirst && (
+              <>
+                <Text style={styles.winnerName}>{winner.name}</Text>
+                <Text style={styles.winnerScore}>
+                  {winner.score} pts
+                  {sorted.length > 1 && (
+                    <Text style={styles.scoreDiff}>
+                      {" "}
+                      · +{scoreDiff} sobre el 2º lugar
+                    </Text>
+                  )}
+                </Text>
+              </>
+            )}
 
-      {/* Resumen rápido humano vs CPU */}
-      {cpu && (
-        <View style={styles.duelCard}>
-          <Text style={styles.duelTitle}>Resumen del duelo</Text>
-          <View style={styles.duelRow}>
-            <View style={styles.duelCol}>
-              <Text style={styles.duelName}>{human.name}</Text>
-              <Text style={styles.duelStat}>
-                Total: {human.score} pts
+            {isTieForFirst && (
+              <View style={{ marginBottom: 4 }}>
+                {topGroup.map((p) => (
+                  <Text
+                    key={p.id || p.name}
+                    style={styles.tiePlayerName}
+                  >
+                    {p.name} — {p.score} pts
+                  </Text>
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.roundInfo}>
+              Rondas jugadas: {roundsPlayed}
+            </Text>
+          </View>
+
+          {/* Resumen rápido del jugador humano */}
+          <View style={styles.humanCard}>
+            <Text style={styles.humanTitle}>Tu desempeño</Text>
+            <Text style={styles.humanName}>{human.name}</Text>
+            <Text style={styles.humanStat}>
+              Puntaje total:{" "}
+              <Text style={styles.humanStatValue}>
+                {human.score} pts
               </Text>
-              <Text style={styles.duelStat}>
-                Rondas ganadas: {humanStats.roundsWon}
+            </Text>
+            <Text style={styles.humanStat}>
+              Rondas ganadas:{" "}
+              <Text style={styles.humanStatValue}>
+                {humanStats.roundsWon}
               </Text>
-              <Text style={styles.duelStat}>
-                Mejor ronda: {humanStats.bestRoundScore} pts
+            </Text>
+            <Text style={styles.humanStat}>
+              Mejor ronda:{" "}
+              <Text style={styles.humanStatValue}>
+                {humanStats.bestRoundScore} pts
               </Text>
-              <Text style={styles.duelStat}>
-                Respuestas correctas: {humanStats.correctAnswers}
+            </Text>
+            <Text style={styles.humanStat}>
+              Respuestas correctas:{" "}
+              <Text style={styles.humanStatValue}>
+                {humanStats.correctAnswers}
               </Text>
-              <Text style={styles.duelStat}>
-                Casillas vacías: {humanStats.emptyAnswers}
+            </Text>
+            <Text style={styles.humanStat}>
+              Casillas vacías:{" "}
+              <Text style={styles.humanStatValue}>
+                {humanStats.emptyAnswers}
               </Text>
-            </View>
-            <View style={styles.duelDivider} />
-            <View style={styles.duelCol}>
-              <Text style={styles.duelName}>{cpu.name}</Text>
-              <Text style={styles.duelStat}>
-                Total: {cpu.score} pts
+            </Text>
+          </View>
+
+          {/* Tabla completa de jugadores */}
+          <Text style={styles.tableTitle}>Marcador completo</Text>
+          <View style={styles.tableCard}>
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+            >
+              {sorted.map((p, index) => {
+                const stats = statsByPlayer[p.id] || {
+                  roundsWon: 0,
+                  bestRoundScore: 0,
+                  correctAnswers: 0,
+                  emptyAnswers: 0,
+                };
+                const tiedWithWinner =
+                  comparePlayersWithTiebreakers(
+                    p,
+                    winner,
+                    statsByPlayer
+                  ) === 0;
+                const isWinner = !isTieForFirst && index === 0;
+
+                return (
+                  <View
+                    key={p.id || p.name}
+                    style={styles.row}
+                  >
+                    <Text style={styles.pos}>
+                      {index + 1}
+                      {"º"}
+                    </Text>
+                    <View style={styles.playerInfo}>
+                      <Text
+                        style={[
+                          styles.playerName,
+                          (isWinner || tiedWithWinner) &&
+                            styles.playerNameWinner,
+                        ]}
+                      >
+                        {p.name} {p.isBot ? "🤖" : "🧑"}
+                      </Text>
+                      <Text style={styles.playerSub}>
+                        Rondas ganadas: {stats.roundsWon} · Mejor
+                        ronda: {stats.bestRoundScore} pts ·
+                        Correctas: {stats.correctAnswers} ·
+                        Vacías: {stats.emptyAnswers}
+                      </Text>
+                    </View>
+                    <Text style={styles.playerScore}>
+                      {p.score} pts
+                    </Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Botones inferiores */}
+          <View style={styles.footerButtons}>
+            {isTieForFirst && (
+              <TouchableOpacity
+                style={[styles.btnPrimary, { marginBottom: 8 }]}
+                onPress={handleSuddenDeath}
+              >
+                <Text style={styles.btnPrimaryText}>
+                  Jugar Sudden Death (1 ronda)
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.btnPrimary}
+              onPress={handlePlayAgain}
+            >
+              <Text style={styles.btnPrimaryText}>
+                Jugar de nuevo
               </Text>
-              <Text style={styles.duelStat}>
-                Rondas ganadas: {cpuStats.roundsWon}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.btnSecondary}
+              onPress={handleBackHome}
+            >
+              <Text style={styles.btnSecondaryText}>
+                Volver al inicio
               </Text>
-              <Text style={styles.duelStat}>
-                Mejor ronda: {cpuStats.bestRoundScore} pts
-              </Text>
-              <Text style={styles.duelStat}>
-                Respuestas correctas: {cpuStats.correctAnswers}
-              </Text>
-              <Text style={styles.duelStat}>
-                Casillas vacías: {cpuStats.emptyAnswers}
-              </Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
-      )}
-
-      {/* Tabla completa de jugadores */}
-      <Text style={styles.tableTitle}>Marcador completo</Text>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {sorted.map((p, index) => {
-          const stats = statsByPlayer[p.id] || {
-            roundsWon: 0,
-            bestRoundScore: 0,
-            correctAnswers: 0,
-            emptyAnswers: 0,
-          };
-          const tiedWithWinner =
-            comparePlayersWithTiebreakers(p, winner, statsByPlayer) === 0;
-          const isWinner = !isTieForFirst && index === 0;
-
-          return (
-            <View key={p.id || p.name} style={styles.row}>
-              <Text style={styles.pos}>
-                {index + 1}
-                {index === 0 ? "º" : "º"}
-              </Text>
-              <View style={styles.playerInfo}>
-                <Text
-                  style={[
-                    styles.playerName,
-                    (isWinner || tiedWithWinner) &&
-                      styles.playerNameWinner,
-                  ]}
-                >
-                  {p.name} {p.isBot ? "🤖" : "🧑"}
-                </Text>
-                <Text style={styles.playerSub}>
-                  Rondas ganadas: {stats.roundsWon} · Mejor ronda:{" "}
-                  {stats.bestRoundScore} pts · Correctas:{" "}
-                  {stats.correctAnswers} · Vacías: {stats.emptyAnswers}
-                </Text>
-              </View>
-              <Text style={styles.playerScore}>{p.score} pts</Text>
-            </View>
-          );
-        })}
-      </ScrollView>
-
-      {/* Botones inferiores */}
-      <View style={styles.footerButtons}>
-        {isTieForFirst && (
-          <TouchableOpacity
-            style={[styles.btnPrimary, { marginBottom: 8 }]}
-            onPress={handleSuddenDeath}
-          >
-            <Text style={styles.btnPrimaryText}>
-              Jugar Sudden Death (1 ronda)
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity style={styles.btnPrimary} onPress={handlePlayAgain}>
-          <Text style={styles.btnPrimaryText}>Jugar de nuevo</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.btnSecondary} onPress={handleBackHome}>
-          <Text style={styles.btnSecondaryText}>Volver al inicio</Text>
-        </TouchableOpacity>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
@@ -314,7 +324,7 @@ export default function FinalResultsScreen({ navigation }) {
  * - rondas ganadas
  * - mejor puntaje de ronda
  * - respuestas correctas
- * - casillas vacías (solo stats)
+ * - casillas vacías
  */
 function computePlayerStats(players, roundHistory) {
   const stats = {};
@@ -331,7 +341,6 @@ function computePlayerStats(players, roundHistory) {
     if (!round || !Array.isArray(round.perPlayer)) return;
     const perPlayer = round.perPlayer;
 
-    // Mejor puntaje de esta ronda
     const maxRoundScore = perPlayer.reduce((max, r) => {
       const rs =
         typeof r.roundScore === "number" ? r.roundScore : 0;
@@ -345,17 +354,14 @@ function computePlayerStats(players, roundHistory) {
       const roundScore =
         typeof r.roundScore === "number" ? r.roundScore : 0;
 
-      // Mejor ronda personal
       if (roundScore > s.bestRoundScore) {
         s.bestRoundScore = roundScore;
       }
 
-      // Ronda ganada (empates cuentan para ambos)
       if (roundScore === maxRoundScore && maxRoundScore > 0) {
         s.roundsWon += 1;
       }
 
-      // Contar correctas y vacías por categoría
       if (r.perCategoryScore && typeof r.perCategoryScore === "object") {
         Object.values(r.perCategoryScore).forEach((entry) => {
           const points =
@@ -390,7 +396,6 @@ function computePlayerStats(players, roundHistory) {
  * Si todo empata → empate real
  */
 function comparePlayersWithTiebreakers(a, b, statsByPlayer) {
-  // 1) Puntaje total
   if (a.score !== b.score) {
     return b.score - a.score;
   }
@@ -405,59 +410,89 @@ function comparePlayersWithTiebreakers(a, b, statsByPlayer) {
   const acorrect = sa.correctAnswers || 0;
   const bcorrect = sb.correctAnswers || 0;
 
-  // 2) Rondas ganadas
   if (aw !== bw) {
     return bw - aw;
   }
 
-  // 3) Mejor ronda
   if (abest !== bbest) {
     return bbest - abest;
   }
 
-  // 4) Respuestas correctas
   if (acorrect !== bcorrect) {
     return bcorrect - acorrect;
   }
 
-  // Empate total incluso después de los criterios
   return 0;
 }
 
 const styles = StyleSheet.create({
+  bg: {
+    flex: 1,
+  },
+  bgImage: {
+    resizeMode: "cover",
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
   container: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingVertical: 24,
-    backgroundColor: "#f9fafb",
+    paddingTop: 110,
+    paddingBottom: 16,
   },
+
   center: {
     flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 110,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f9fafb",
   },
   emptyText: {
     fontSize: 16,
-    color: "#4b5563",
+    color: "#111827",
     marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 999,
+  },
+
+  headerCard: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.8)",
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 4,
+    marginBottom: 10,
   },
   title: {
     fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 4,
+    fontWeight: "800",
     color: "#111827",
+    marginBottom: 4,
   },
   subtitleHeader: {
     fontSize: 13,
-    color: "#6b7280",
-    marginBottom: 12,
+    color: "#4b5563",
   },
+
+  // Glass dark card del ganador
   winnerCard: {
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
-    backgroundColor: "#111827",
-    marginBottom: 16,
+    backgroundColor: "rgba(15,23,42,0.65)", // glass oscuro
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.8)",
+    marginBottom: 14,
   },
   trophy: {
     fontSize: 40,
@@ -466,7 +501,7 @@ const styles = StyleSheet.create({
   },
   winnerName: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#f9fafb",
     textAlign: "center",
     marginTop: 4,
@@ -482,79 +517,73 @@ const styles = StyleSheet.create({
   },
   roundInfo: {
     fontSize: 12,
-    color: "#9ca3af",
-    textAlign: "center",
-    marginTop: 4,
-  },
-  tiebreakerInfo: {
-    fontSize: 11,
-    color: "#9ca3af",
+    color: "#d1d5db",
     textAlign: "center",
     marginTop: 8,
-  },
-  tiebreakerHighlight: {
-    color: "#facc15",
-    fontWeight: "500",
   },
   tiePlayerName: {
     fontSize: 14,
     color: "#f9fafb",
     textAlign: "center",
   },
-  duelCard: {
-    borderRadius: 16,
-    padding: 16,
-    backgroundColor: "#ffffff",
+
+  humanCard: {
+    borderRadius: 20,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.95)",
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  duelTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 8,
+  humanTitle: {
+    fontSize: 15,
+    fontWeight: "700",
     color: "#111827",
-    textAlign: "center",
+    marginBottom: 4,
   },
-  duelRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
-  },
-  duelCol: {
-    flex: 1,
-  },
-  duelDivider: {
-    width: 1,
-    backgroundColor: "#e5e7eb",
-    marginHorizontal: 8,
-  },
-  duelName: {
+  humanName: {
     fontSize: 14,
     fontWeight: "600",
-    marginBottom: 4,
     color: "#111827",
+    marginBottom: 6,
   },
-  duelStat: {
+  humanStat: {
     fontSize: 12,
     color: "#4b5563",
     marginBottom: 2,
   },
-  tableTitle: {
-    fontSize: 16,
+  humanStatValue: {
     fontWeight: "600",
-    marginBottom: 8,
     color: "#111827",
+  },
+
+  tableTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 6,
+  },
+  tableCard: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    marginBottom: 10,
+    overflow: "hidden",
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     paddingBottom: 16,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderColor: "#e5e7eb",
   },
@@ -567,7 +596,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   playerName: {
-    fontSize: 15,
+    fontSize: 14,
     color: "#111827",
   },
   playerNameWinner: {
@@ -578,12 +607,14 @@ const styles = StyleSheet.create({
     color: "#6b7280",
   },
   playerScore: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: "#111827",
+    marginLeft: 8,
   },
+
   footerButtons: {
-    marginTop: 8,
+    marginTop: 4,
   },
   btnPrimary: {
     backgroundColor: "#16a34a",
@@ -595,18 +626,20 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     textAlign: "center",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
   },
+  // Ahora con color sólido para "Volver al inicio"
   btnSecondary: {
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#d1d5db",
+    borderColor: "#111827",
+    backgroundColor: "#111827",
   },
   btnSecondaryText: {
-    color: "#374151",
+    color: "#f9fafb",
     textAlign: "center",
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
   },
 });

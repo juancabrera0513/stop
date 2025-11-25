@@ -7,18 +7,24 @@ import {
   TouchableOpacity,
   ImageBackground,
   Image,
+  SafeAreaView,
 } from "react-native";
 import { useGame } from "../context/GameContext";
 
-const backgroundImage = require("../../assets/images/stop-bg.png");
-// Asegúrate de guardar tu PNG aquí:
+const backgroundImage = require("../../assets/images/bg-home.png");
+
+// Botón grande central
 const playButtonImage = require("../../assets/images/home-play-button.png");
 
-export default function HomeScreen({ navigation }) {
+// Botones inferiores
+const footerInfoImage = require("../../assets/images/home-footer-info.png");
+const footerModesImage = require("../../assets/images/home-footer-modes.png");
+const footerSettingsImage = require("../../assets/images/home-footer-settings.png");
+
+function HomeScreen({ navigation }) {
   const [isPressed, setIsPressed] = useState(false);
   const { resetGame } = useGame();
 
-  // Al entrar al Home, reinicia el estado del juego (ronda, puntajes, etc.)
   useEffect(() => {
     resetGame();
   }, [resetGame]);
@@ -32,40 +38,89 @@ export default function HomeScreen({ navigation }) {
       style={styles.bg}
       imageStyle={styles.bgImage}
     >
-      <View style={styles.overlay}>
-        {/* Títulos */}
-        <View style={styles.header}>
-          <Text style={styles.appName}>STOP</Text>
-          <Text style={styles.title}>Juego de palabras</Text>
-        </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.overlay}>
+          {/* Títulos */}
+          <View style={styles.header}>
+            <Text style={styles.appName}>STOP</Text>
+            <Text style={styles.title}>Juego de palabras</Text>
+          </View>
 
-        {/* Botón principal */}
-        <View style={styles.centerArea}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate("SinglePlayerSetup")}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            style={[
-              styles.playButtonWrapper,
-              isPressed && styles.playButtonWrapperPressed,
-            ]}
-          >
-            <Image
-              source={playButtonImage}
-              style={styles.playButtonImage}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
-        </View>
+          {/* Botón principal */}
+          <View style={styles.centerArea}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => navigation.navigate("SinglePlayerSetup")}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              style={[
+                styles.playButtonWrapper,
+                isPressed && styles.playButtonWrapperPressed,
+              ]}
+            >
+              <Image
+                source={playButtonImage}
+                style={styles.playButtonImage}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          </View>
 
-        {/* Texto inferior */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Más modos de juego llegarán pronto
-          </Text>
+          {/* Footer con 3 botones grandes */}
+          <View style={styles.footer}>
+            {/* Izquierda */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                // navigation.navigate("Store");
+              }}
+              style={[styles.footerButtonWrapper, styles.footerButtonWrapperLeft]}
+            >
+              <Image
+                source={footerInfoImage}
+                style={styles.footerIconLeft}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+
+            {/* Centro */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                // Home actual
+              }}
+              style={[
+                styles.footerButtonWrapper,
+                styles.footerButtonWrapperCenter,
+              ]}
+            >
+              <Image
+                source={footerModesImage}
+                style={styles.footerIconCenter}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+
+            {/* Derecha */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                // navigation.navigate("Friends");
+              }}
+              style={[
+                styles.footerButtonWrapper,
+                styles.footerButtonWrapperRight,
+              ]}
+            >
+              <Image
+                source={footerSettingsImage}
+                style={styles.footerIconRight}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </SafeAreaView>
     </ImageBackground>
   );
 }
@@ -77,15 +132,17 @@ const styles = StyleSheet.create({
   bgImage: {
     resizeMode: "cover",
   },
+  safeArea: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingTop: 32,
     justifyContent: "space-between",
   },
 
   header: {
-    marginTop: 32,
     alignItems: "center",
   },
   appName: {
@@ -106,12 +163,6 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
-  subtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    color: "rgba(255,255,255,0.9)",
-    textAlign: "center",
-  },
 
   centerArea: {
     flex: 1,
@@ -119,9 +170,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // 🔹 Botón grande
   playButtonWrapper: {
-    width: "100%", // más ancho
+    width: "100%",
     maxWidth: 420,
     borderRadius: 32,
     shadowColor: "#000",
@@ -139,15 +189,51 @@ const styles = StyleSheet.create({
   },
   playButtonImage: {
     width: "100%",
-    height: 440, // tamaño grande como pusiste
+    height: 440,
   },
 
+  // 🔻 FOOTER
   footer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    height: 120,
+    marginBottom: 0,
+    // ⬇️ Mueve TODOS los íconos hacia arriba/abajo (positivo = más abajo)
+    transform: [{ translateY: 37 }],
   },
-  footerText: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.9)",
+
+  footerButtonWrapper: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  // ⬇️ Mover cada icono de forma INDIVIDUAL:
+  //    - translateY: arriba/abajo  (positivo = más abajo)
+  //    - translateX: izquierda/derecha (positivo = más a la derecha)
+  footerButtonWrapperLeft: {
+    transform: [{ translateY: 1 }, { translateX: -23 }], // toca estos valores
+  },
+  footerButtonWrapperCenter: {
+    transform: [{ translateY: 0 }, { translateX: 0 }],  // centro
+  },
+  footerButtonWrapperRight: {
+    transform: [{ translateY: 7 }, { translateX: 25 }],  // icono derecho
+  },
+
+  // ⬇️ TAMAÑO de cada icono. Cambia width/height por icono individual.
+  footerIconLeft: {
+    width: 73,
+    height: 73,
+  },
+  footerIconCenter: {
+    width: 98,
+    height: 98,
+  },
+  footerIconRight: {
+    width: 150,
+    height: 150,
   },
 });
+
+export default HomeScreen;

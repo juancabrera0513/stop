@@ -11,129 +11,97 @@ function randomInt(min, max) {
 }
 
 /**
- * Genera una "palabra mal escrita" que:
- * - SIEMPRE comienza con la letra de la ronda
- * - Se basa en una palabra real del diccionario cuando es posible
- *   para que se vea más humana (no puro random).
+ * Devuelve un “factor de velocidad base” según dificultad.
+ * Esto no es tiempo real, solo una forma de que:
+ * - hard → contesta más categorías
+ * - easy → menos
  */
-function makeMisspelledWord(letter, baseWord, fallbackStem = "xxx") {
-  const L = (letter || "A").toUpperCase();
-
-  let base = (baseWord || "").toString().trim();
-
-  // Si no tenemos base, usamos el fallback
-  if (!base) {
-    base = L + fallbackStem;
-  }
-
-  // Normalizamos que empiece por la letra de la ronda,
-  // pero no nos importa si la original empezaba o no.
-  const tail = base.slice(1); // quitamos primera letra original
-  let chars = tail.split("");
-
-  if (chars.length === 0) {
-    // mínimo 2–3 letras de cola
-    const vowels = ["a", "e", "i", "o", "u"];
-    const len = randomInt(2, 3);
-    const arr = [];
-    for (let i = 0; i < len; i++) {
-      arr.push(vowels[randomInt(0, vowels.length - 1)]);
-    }
-    chars = arr;
-  } else {
-    // Hacemos una ligera mutación: cambiar una letra por otra
-    const idx = randomInt(0, chars.length - 1);
-    const alphabet = "abcdefghijklmnopqrstuvwxyz";
-    const current = chars[idx].toLowerCase();
-    let replacement = current;
-    let tries = 0;
-    while (replacement === current && tries < 5) {
-      replacement = alphabet.charAt(randomInt(0, alphabet.length - 1));
-      tries++;
-    }
-    chars[idx] = replacement;
-  }
-
-  const mutatedTail = chars.join("");
-  return L + mutatedTail;
+function getDifficultySpeedMultiplier(difficulty = "easy") {
+  if (difficulty === "hard") return 1.15;
+  if (difficulty === "medium") return 1.0;
+  return 0.85; // easy
 }
 
 /**
- * Genera todas las respuestas del bot para una ronda.
- *
- * Estrategia:
- * - Según la dificultad, hay distintas probabilidades de:
- *   - usar una palabra correcta de diccionario
- *   - usar una palabra "mal escrita" que igual empieza por la letra
- *
- * NOTA: la validación real de si es correcta o no la hace gameEngine
- * usando el diccionario. Aquí solo decidimos la intención del bot.
+ * Probabilidad base de que un bot intente contestar una categoría
+ * según dificultad (antes de aplicar velocidad).
  */
-export function generateBotAnswers(letter, categories, difficulty = "easy") {
-  const cats = Array.isArray(categories) ? categories : [];
-  const L = (letter || "A").toUpperCase();
+function getBaseAnswerChance(difficulty = "easy") {
+  if (difficulty === "hard") return 0.9;
+  if (difficulty === "medium") return 0.75;
+  return 0.6; // easy
+}
 
-  // Perfil de comportamiento por dificultad
-  // correct = probabilidad de intentar usar palabra real del diccionario
-  // wrong   = probabilidad de usar palabra mal escrita / inventada
-  let profile;
-  if (difficulty === "hard") {
-    profile = { wrong: 0.1, correct: 0.9 };
-  } else if (difficulty === "medium") {
-    profile = { wrong: 0.35, correct: 0.65 };
-  } else {
-    // easy
-    profile = { wrong: 0.6, correct: 0.4 };
-  }
-
+/**
+ * Genera todas las respuestas de UN bot para una ronda.
+ *
+ * letter: letra de la ronda
+ * categories: array de categorías
+ * difficulty: "easy" | "medium" | "hard"
+ * speedFactor: factor 0–>∞ (normalmente entre 0.2 y 1.3) que simula
+ *              qué tanto le dio tiempo a este bot antes del STOP.
+ *
+ * Cuanto mayor sea speedFactor → más categorías contestará.
+ */
+export function generateBotAnswers(
+  letter,
+  categories,
+  difficulty = "easy",
+  speedFactor = 1
+) {
   const answers = {};
+  const baseChance = getBaseAnswerChance(difficulty);
+  const difficultySpeed = getDifficultySpeedMultiplier(difficulty);
 
-  cats.forEach((cat) => {
+  // Chance global de este bot para la ronda
+  let globalChance = baseChance * difficultySpeed * speedFactor;
+
+  // Clamp razonable
+  if (globalChance < 0.1) globalChance = 0.1;
+  if (globalChance > 1.0) globalChance = 1.0;
+
+  categories.forEach((category) => {
+    // Cada categoría tiene un poco de ruido aleatorio
+    const jitter = 0.9 + Math.random() * 0.3; // 0.9–1.2
+    const chance = Math.min(1, Math.max(0, globalChance * jitter));
+
     const roll = Math.random();
 
-    const safeCat = (cat || "").toString().trim();
-    const stem = safeCat ? safeCat.toLowerCase().slice(0, 3) : "xxx";
-
-    let answer = "";
-
-    if (roll < profile.correct) {
-      // Intenta ser correcto: buscar palabra real en el diccionario
-      const word = getRandomWord(cat, letter, difficulty);
-      if (word && word.trim()) {
-        answer = word;
-      } else {
-        // Sin datos en diccionario → al menos algo que empiece por la letra
-        answer = `${L}${stem}`;
-      }
+    if (roll < chance) {
+      // Intenta responder con una palabra real
+      const word = getRandomWord(category, letter, difficulty);
+      // Si por alguna razón no hay palabra, lo dejamos vacío
+      answers[category] = word || "";
     } else {
-      // Intenta fallar, pero de forma "humana": mal escrito
-      const base = getRandomWord(cat, letter, difficulty);
-      answer = makeMisspelledWord(letter, base, stem);
+      // ✨ Realismo: a veces simplemente NO contesta esa categoría
+      answers[category] = "";
     }
-
-    // Seguridad final: nunca devolver vacío
-    if (!answer || !answer.trim()) {
-      answer = `${L}${stem}`;
-    }
-
-    answers[cat] = answer;
   });
+
+  // Pequeña probabilidad de que el bot “tiltee” y conteste casi nada
+  if (Math.random() < 0.05) {
+    Object.keys(answers).forEach((cat, idx) => {
+      if (idx > 0) answers[cat] = "";
+    });
+  }
 
   return answers;
 }
 
 /**
- * Determina después de cuántos segundos el bot dirá STOP.
+ * Calcula en cuántos segundos (aprox) un bot "rápido" intentaría decir STOP.
  *
- * Cuanto más difícil:
- * - tiende a decir STOP antes
- * - pero siempre dentro de un rango razonable del tiempo total
+ * Esto no se usa para calcular respuestas directas, solo para que la
+ * UI sepa cuándo el bot hará STOP automáticamente.
+ *
+ * letter y categories no se usan mucho ahora, pero se dejan por si
+ * en el futuro quieres hacer lógica más compleja.
  */
 export function getBotStopDelay(
   letter,
   categories,
-  difficulty,
-  roundTimeLimit
+  difficulty = "easy",
+  roundTimeLimit = 45
 ) {
   const total = typeof roundTimeLimit === "number" ? roundTimeLimit : 45;
 
@@ -141,9 +109,9 @@ export function getBotStopDelay(
   let maxRatio;
 
   if (difficulty === "hard") {
-    // Más rápido
-    minRatio = 0.3;
-    maxRatio = 0.6;
+    // hard → suele decir STOP antes (más rápido)
+    minRatio = 0.35;
+    maxRatio = 0.55;
   } else if (difficulty === "medium") {
     minRatio = 0.45;
     maxRatio = 0.75;

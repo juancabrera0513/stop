@@ -20,7 +20,7 @@ export default function SinglePlayerSetupScreen({ navigation }) {
   const [playerName, setPlayerName] = useState("Jugador");
   const [rounds, setRounds] = useState(3);
   const [difficulty, setDifficulty] = useState("easy");
-  const [cpuCount, setCpuCount] = useState(1); // 👈 nuevo
+  const [cpuCount, setCpuCount] = useState(1); // CPUs rivales
 
   const onStart = () => {
     if (!playerName.trim()) {
@@ -29,12 +29,17 @@ export default function SinglePlayerSetupScreen({ navigation }) {
     }
 
     const r = rounds || 1;
+    const safeCpuCount =
+      typeof cpuCount === "number" && cpuCount > 0 && cpuCount <= 3
+        ? cpuCount
+        : 1;
 
     startSinglePlayer({
       playerName: playerName.trim(),
       rounds: r,
       difficultyLevel: difficulty,
-      cpuCount, // 👈 envías cuántas CPUs hay
+      // 👇 aquí conectamos con el GameContext (numBots)
+      numBots: safeCpuCount,
     });
 
     navigation.replace("RoundIntro");
@@ -66,7 +71,7 @@ export default function SinglePlayerSetupScreen({ navigation }) {
             <View style={styles.card}>
               {/* Nombre */}
               <Text style={styles.label}>Tu nombre</Text>
-            
+
               <TextInput
                 style={styles.input}
                 value={playerName}
@@ -80,7 +85,6 @@ export default function SinglePlayerSetupScreen({ navigation }) {
               <Text style={[styles.label, { marginTop: 18 }]}>
                 Número de rondas
               </Text>
-             
 
               <View style={styles.pickerWrapper}>
                 <Picker
@@ -174,7 +178,6 @@ export default function SinglePlayerSetupScreen({ navigation }) {
               <TouchableOpacity style={styles.btnStart} onPress={onStart}>
                 <Text style={styles.btnText}>Empezar partida</Text>
               </TouchableOpacity>
-
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
