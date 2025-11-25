@@ -1,89 +1,117 @@
 // src/logic/dictionary.js
 
 // Importa el JSON con tu diccionario en español
-// Ajusta la ruta si lo guardaste en otro sitio.
+// (Nombre, Apellido, País, Ciudad, Animal, Fruta/Comida, Color, etc.)
 import rawDictionary from "../data/dictionary.es.json";
 
-// Tu diccionario completo (por categoría)
+// Diccionario completo por categoría
+// {
+//   "Nombre": [...],
+//   "Apellido": [...],
+//   ...
+// }
 const DICTIONARY = rawDictionary;
 
-// Normalizar: sin espacios extremos, minúsculas, sin tildes
-function normalize(str) {
+/**
+ * Normalizar texto:
+ * - trim()
+ * - minúsculas
+ * - sin tildes (á -> a, ñ se mantiene como ñ)
+ */
+export function normalize(str) {
   if (!str) return "";
   return String(str)
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, ""); // quita acentos
+    .replace(/[\u0300-\u036f]/g, ""); // quita acentos/diacríticos
 }
 
 /**
- * Devuelve una palabra aleatoria del diccionario para una
- * categoría/letra.
+ * Devuelve la lista de palabras de una categoría.
+ * Si no hay lista o no es un array, devuelve [] para evitar errores.
+ */
+export function getCategoryList(category) {
+  const list = DICTIONARY[category];
+  if (!list || !Array.isArray(list)) return [];
+  return list;
+}
+
+/**
+ * Devuelve la primera letra "real" (normalizada) de un string.
+ * Ej.: "  México" -> "m"
+ */
+function firstLetter(str) {
+  const norm = normalize(str);
+  return norm.charAt(0) || "";
+}
+
+/**
+ * 🚨 IMPORTANTE: mantenemos la firma original
+ * getRandomWord(category, letter, _difficulty)
  *
- * REGLA IMPORTANTE:
- * - SOLO devuelve palabras que empiezan con la letra de la ronda.
- * - Si no hay ninguna palabra real para esa letra → devuelve "",
- *   para que el bot pueda entrar en "modo fallo" y generar
- *   una palabra inventada pero con la letra correcta.
+ * Obtiene una palabra aleatoria del diccionario
+ * que empiece por la letra indicada y pertenezca a la categoría.
  *
- * El parámetro `difficulty` se mantiene en la firma para no romper
- * el código del bot, pero aquí lo ignoramos.
+ * - category: ej. "País"
+ * - letter: ej. "M"
+ * - _difficulty: se ignora aquí, pero se deja para no romper aiBot.js
  */
 export function getRandomWord(category, letter, _difficulty = "easy") {
-  const list = DICTIONARY[category];
-  if (!list || !Array.isArray(list) || list.length === 0) return "";
-
-  const normLetter = normalize(letter).charAt(0);
+  const normLetter = firstLetter(letter);
   if (!normLetter) return "";
 
-  // Filtrar SOLO palabras reales que empiezan con la letra
-  const filtered = list.filter((w) =>
-    normalize(w).startsWith(normLetter)
+  const list = getCategoryList(category);
+
+  // Filtramos solo palabras que empiecen por la letra
+  const candidates = list.filter(
+    (word) => firstLetter(word) === normLetter
   );
 
-  if (filtered.length > 0) {
-    const idx = Math.floor(Math.random() * filtered.length);
-    return filtered[idx];
+  if (candidates.length === 0) {
+    // No hay palabras para esa letra/categoría
+    return "";
   }
 
-  // Si no hay palabras reales para esa letra en esta categoría,
-  // devolvemos "" para que la IA genere un fallo "humano"
-  // (palabra inventada pero con la letra correcta).
-  return "";
+  const idx = Math.floor(Math.random() * candidates.length);
+  return candidates[idx];
 }
 
 /**
- * Valida si una palabra es aceptada para:
- * - esta letra
- * - esta categoría
+ * 🚨 IMPORTANTE: mantenemos la firma original
+ * isWordAllowedForCategory(letter, category, rawAnswer)
+ *
+ * Verifica si una palabra es válida para:
+ * - la categoría dada
+ * - la letra de la ronda
  *
  * Reglas:
- * - Debe empezar con la letra (después de normalizar).
- * - Si existe diccionario para la categoría, SOLO es válida
- *   si está en la lista.
- * - Si NO hay diccionario para esa categoría, aceptamos
- *   cualquier palabra que empiece por la letra.
+ * 1) La palabra debe empezar por la letra de la ronda (normalizada).
+ * 2) Si existe diccionario para la categoría, la palabra debe estar en él (normalizada).
+ * 3) Si NO hay lista para esa categoría, con que cumpla la letra se considera válida.
+ *
+ * @param {string} letter      - letra de la ronda (ej.: "M")
+ * @param {string} category    - categoría (ej.: "País")
+ * @param {string} rawAnswer   - respuesta del jugador
  */
-export function isWordAllowedForCategory(
-  letter,
-  category,
-  rawAnswer
-) {
+export function isWordAllowedForCategory(letter, category, rawAnswer) {
   const normWord = normalize(rawAnswer);
-  const normLetter = normalize(letter).charAt(0);
+  const normLetter = firstLetter(letter);
 
   if (!normWord || !normLetter) return false;
+
+  // Debe empezar por la letra de la ronda
   if (!normWord.startsWith(normLetter)) return false;
 
-  const list = DICTIONARY[category];
+  const list = getCategoryList(category);
 
-  if (!list || !Array.isArray(list)) {
-    // Sin diccionario para esa categoría → con que empiece por la letra, vale.
-    return true;
-  }
+  // Si no hay diccionario para esa categoría, nos conformamos con la letra
+  if (!list.length) return true;
 
   // ¿La palabra (normalizada) está en la lista (normalizada)?
   const exists = list.some((w) => normalize(w) === normWord);
   return exists;
 }
+
+// Export opcional del diccionario por si quieres debuggear/inspeccionar
+export { DICTIONARY };
