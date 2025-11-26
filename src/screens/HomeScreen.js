@@ -10,7 +10,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useGame } from "../context/GameContext";
-import TutorialModal from "../components/TutorialModal"; // 👈 NUEVO
+import TutorialModal from "../components/TutorialModal";
+import SettingsModal from "../components/SettingsModal"; // 👈 asegúrate de tener este componente
 
 const backgroundImage = require("../../assets/images/bg-home.png");
 
@@ -24,8 +25,16 @@ const footerSettingsImage = require("../../assets/images/home-footer-settings.pn
 
 function HomeScreen({ navigation }) {
   const [isPressed, setIsPressed] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false); // 👈 estado para el modal
-  const { resetGame } = useGame();
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const {
+    resetGame,
+    soundEnabled,
+    vibrationEnabled,
+    toggleSound,
+    toggleVibration,
+  } = useGame();
 
   useEffect(() => {
     resetGame();
@@ -42,14 +51,23 @@ function HomeScreen({ navigation }) {
     >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.overlay}>
-          {/* 🔹 Botón flotante de ayuda (?) */}
-          {/* Modifica helpButton para moverlo (top/right) */}
+          {/* 🔹 Botón flotante de ayuda (?) – IZQUIERDA */}
           <TouchableOpacity
             style={styles.helpButton}
             activeOpacity={0.9}
             onPress={() => setShowTutorial(true)}
           >
             <Text style={styles.helpButtonText}>?</Text>
+          </TouchableOpacity>
+
+          {/* 🔹 Botón flotante de Settings – DERECHA */}
+          <TouchableOpacity
+            style={styles.settingsButton}
+            activeOpacity={0.9}
+            onPress={() => setShowSettings(true)}
+          >
+            {/* 👇 aquí cambiamos el icono a ⚙️ */}
+            <Text style={styles.settingsButtonText}>⚙️</Text>
           </TouchableOpacity>
 
           {/* Títulos */}
@@ -117,7 +135,7 @@ function HomeScreen({ navigation }) {
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => {
-                // Futuro: navegación a "Settings/Friends"
+                // Futuro: navegación a "Friends"
               }}
               style={[
                 styles.footerButtonWrapper,
@@ -134,10 +152,20 @@ function HomeScreen({ navigation }) {
         </View>
       </SafeAreaView>
 
-      {/* 🔹 Modal de tutorial separado */}
+      {/* 🔹 Modal de tutorial */}
       <TutorialModal
         visible={showTutorial}
         onClose={() => setShowTutorial(false)}
+      />
+
+      {/* 🔹 Modal de settings (sonido / vibración) */}
+      <SettingsModal
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        soundEnabled={soundEnabled}
+        vibrationEnabled={vibrationEnabled}
+        onToggleSound={toggleSound}
+        onToggleVibration={toggleVibration}
       />
     </ImageBackground>
   );
@@ -161,21 +189,38 @@ const styles = StyleSheet.create({
   },
 
   // 🔹 Botón flotante de ayuda (?)
-  // - Cambia top/right para moverlo
-  // - Cambia width/height/fontSize para tamaño
   helpButton: {
     position: "absolute",
-    top: 20, // ⬅️ mueve vertical
-    right: 20, // ⬅️ mueve horizontal
+    top: 20,
+    left: 20,
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: "rgba(15,23,42,0.85)",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 10,
+    zIndex: 20,
   },
   helpButtonText: {
+    color: "#f9fafb",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  // 🔹 Botón flotante de Settings (derecha)
+  settingsButton: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(15,23,42,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
+  },
+  settingsButtonText: {
     color: "#f9fafb",
     fontSize: 18,
     fontWeight: "800",
@@ -238,7 +283,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: 120,
     marginBottom: 0,
-    // Mueve TODOS los íconos hacia arriba/abajo (positivo = más abajo)
     transform: [{ translateY: 37 }],
   },
 
@@ -246,7 +290,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
   },
-  // Mover cada icono de forma INDIVIDUAL:
   footerButtonWrapperLeft: {
     transform: [{ translateY: 1 }, { translateX: -23 }],
   },
@@ -257,7 +300,6 @@ const styles = StyleSheet.create({
     transform: [{ translateY: 7 }, { translateX: 25 }],
   },
 
-  // Tamaño de cada icono
   footerIconLeft: {
     width: 73,
     height: 73,
