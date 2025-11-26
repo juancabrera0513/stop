@@ -1,30 +1,31 @@
 // src/screens/GameScreen.js
 import React, {
   useEffect,
-  useState,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ImageBackground,
   Image,
+  ImageBackground,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
   TouchableWithoutFeedback,
-  Keyboard,
+  View,
 } from "react-native";
-import { useGame } from "../context/GameContext";
+import { playMusic, stopMusic } from "../audio/soundManager"; // 👈 usamos el manager de audio
 import AvatarReaction from "../components/AvatarReaction";
+import { useGame } from "../context/GameContext";
 
 // 👇 imágenes
-import coinPng from "../../assets/images/coin.png";
 import plusPng from "../../assets/images/coin-plus.png";
-import homeIcon from "../../assets/images/home-footer-modes.png"; // Nuevo icono Home
+import coinPng from "../../assets/images/coin.png";
+import homeIcon from "../../assets/images/home-footer-modes.png";
 
 // 🔹 Longitud mínima para considerar una respuesta "llena" a efectos de STOP.
 const MIN_ANSWER_LENGTH = 1;
@@ -43,6 +44,8 @@ export default function GameScreen({ navigation }) {
     stage,
     roundTimeLimit,
     botStopAfter,
+    resetGame,
+    soundEnabled, // 👈 para respetar si el usuario silenció
   } = useGame();
 
   const [timeLeft, setTimeLeft] = useState(roundTimeLimit || 45);
@@ -52,6 +55,26 @@ export default function GameScreen({ navigation }) {
   useEffect(() => {
     pressStopRef.current = pressStop;
   }, [pressStop]);
+
+  /**
+   * 🎵 CONTROL TOTAL DE MÚSICA DE RONDA EN ESTA PANTALLA
+   *
+   * - Al entrar: parar lo que haya y reproducir "round"
+   * - Al salir: parar "round" y volver a "menu"
+   */
+  useEffect(() => {
+    if (soundEnabled) {
+      // paramos cualquier música previa (por si acaso) y arrancamos ronda
+      stopMusic();
+      playMusic("round", { enabled: true, loop: true });
+    }
+
+    return () => {
+      // al desmontar, paramos ronda y volvemos al menú
+      stopMusic();
+      playMusic("menu", { enabled: soundEnabled, loop: true });
+    };
+  }, [soundEnabled]);
 
   // Reset al cambiar de ronda/letra
   useEffect(() => {
@@ -110,21 +133,21 @@ export default function GameScreen({ navigation }) {
   if (!player || !bot) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>Algo salió mal, no hay partida activa.</Text>
+        <Text style={styles.errorText}>
+          Algo salió mal, no hay partida activa.
+        </Text>
       </View>
     );
   }
 
   const totalQuestions = categories.length;
 
-  // 🔹 Helper: ¿esta respuesta cuenta como "llena"?
   const isAnswered = (value) =>
     value.toString().trim().length >= MIN_ANSWER_LENGTH;
 
   const currentCategory = categories[currentIndex];
   const currentValue = (currentAnswers?.[currentCategory] || "").toString();
 
-  // Categorías pendientes (solo vacías)
   const pendingCategories = useMemo(
     () =>
       categories.filter(
@@ -137,7 +160,6 @@ export default function GameScreen({ navigation }) {
   const answeredCount = totalQuestions - pendingCategories.length;
   const allFilled = pendingCategories.length === 0;
 
-  // NEXT habilitado solo si la actual está llena
   const canGoNext = useMemo(
     () =>
       stage === "playing" &&
@@ -146,13 +168,11 @@ export default function GameScreen({ navigation }) {
     [stage, currentValue, pendingCategories.length]
   );
 
-  // SKIP: solo si quedan 2+ pendientes
   const canSkip = useMemo(
     () => stage === "playing" && pendingCategories.length > 1,
     [stage, pendingCategories.length]
   );
 
-  // STOP solo si todo está lleno
   const canPressStop = useMemo(
     () => stage === "playing" && allFilled,
     [stage, allFilled]
@@ -163,7 +183,6 @@ export default function GameScreen({ navigation }) {
     updateAnswer(currentCategory, text);
   };
 
-  // Navegación circular entre pendientes
   const goToNextPending = () => {
     if (pendingCategories.length === 0) return;
 
@@ -197,13 +216,13 @@ export default function GameScreen({ navigation }) {
     navigation.replace("RoundResults");
   };
 
-  // Progreso visual CPU
   const cpuProgress = useMemo(() => {
     if (
       botStopAfter == null ||
       !roundTimeLimit ||
       typeof timeLeft !== "number"
-    ) return 0;
+    )
+      return 0;
 
     const elapsed = roundTimeLimit - timeLeft;
     if (elapsed <= 0) return 0;
@@ -224,13 +243,13 @@ export default function GameScreen({ navigation }) {
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.overlay}>
-
             {/* TOP BAR */}
             <View style={styles.topBar}>
-
-              {/* BOTÓN HOME — CORRECTO */}
+              {/* BOTÓN HOME */}
               <TouchableOpacity
                 onPress={() => {
+                  // esta ruta SÍ resetea todo de forma elegante
+                  resetGame();
                   navigation.reset({
                     index: 0,
                     routes: [{ name: "Home" }],
@@ -248,11 +267,19 @@ export default function GameScreen({ navigation }) {
 
               {/* Coins HUD */}
               <View style={styles.coinsWrapper}>
-                <View style={styles.coinsShadowBar} />
-                <Image source={coinPng} style={styles.coinImage} resizeMode="contain" />
+                <View className={styles.coinsShadowBar} />
+                <Image
+                  source={coinPng}
+                  style={styles.coinImage}
+                  resizeMode="contain"
+                />
                 <Text style={styles.coinsAmount}>2,000</Text>
                 <TouchableOpacity style={styles.coinsPlusButton}>
-                  <Image source={plusPng} style={styles.coinsPlusImage} resizeMode="contain" />
+                  <Image
+                    source={plusPng}
+                    style={styles.coinsPlusImage}
+                    resizeMode="contain"
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -281,11 +308,16 @@ export default function GameScreen({ navigation }) {
                 </View>
 
                 <Text style={styles.stopProgressLabel}>
-                  {bot.name} se acerca a STOP ({Math.round(cpuProgress * 100)}%)
+                  {bot.name} se acerca a STOP (
+                  {Math.round(cpuProgress * 100)}%)
                 </Text>
               </View>
 
-              <AvatarReaction side="right" baseEmoji="🤖" initialReaction="😡" />
+              <AvatarReaction
+                side="right"
+                baseEmoji="🤖"
+                initialReaction="😡"
+              />
             </View>
 
             {/* Input */}
@@ -296,7 +328,9 @@ export default function GameScreen({ navigation }) {
                 onChangeText={handleChange}
                 editable={stage === "playing"}
                 placeholder={
-                  currentLetter ? `Palabra con ${currentLetter}` : "Escribe tu respuesta"
+                  currentLetter
+                    ? `Palabra con ${currentLetter}`
+                    : "Escribe tu respuesta"
                 }
                 placeholderTextColor="#9CA3AF"
                 autoCapitalize="words"
@@ -309,7 +343,8 @@ export default function GameScreen({ navigation }) {
                 Ronda {roundNumber} de {totalRounds}
               </Text>
               <Text style={styles.infoText}>
-                Tiempo: <Text style={styles.infoHighlight}>{timeLeft}s</Text>
+                Tiempo:{" "}
+                <Text style={styles.infoHighlight}>{timeLeft}s</Text>
               </Text>
             </View>
 
@@ -323,7 +358,10 @@ export default function GameScreen({ navigation }) {
 
                   <View style={styles.navRow}>
                     <TouchableOpacity
-                      style={[styles.skipButton, !canSkip && styles.buttonDisabled]}
+                      style={[
+                        styles.skipButton,
+                        !canSkip && styles.buttonDisabled,
+                      ]}
                       disabled={!canSkip}
                       onPress={handleSkip}
                     >
@@ -331,7 +369,10 @@ export default function GameScreen({ navigation }) {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={[styles.nextButton, !canGoNext && styles.buttonDisabled]}
+                      style={[
+                        styles.nextButton,
+                        !canGoNext && styles.buttonDisabled,
+                      ]}
                       disabled={!canGoNext}
                       onPress={handleNext}
                     >
@@ -345,9 +386,14 @@ export default function GameScreen({ navigation }) {
                 </>
               ) : (
                 <>
-                  <Text style={styles.questionsText}>Todas las categorías respondidas</Text>
+                  <Text style={styles.questionsText}>
+                    Todas las categorías respondidas
+                  </Text>
                   <TouchableOpacity
-                    style={[styles.stopButton, !canPressStop && styles.buttonDisabled]}
+                    style={[
+                      styles.stopButton,
+                      !canPressStop && styles.buttonDisabled,
+                    ]}
                     disabled={!canPressStop}
                     onPress={handleStop}
                   >
@@ -356,7 +402,6 @@ export default function GameScreen({ navigation }) {
                 </>
               )}
             </View>
-
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -392,7 +437,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  // 🔵 Nuevo botón Home
   homeButton: {
     width: 36,
     height: 36,

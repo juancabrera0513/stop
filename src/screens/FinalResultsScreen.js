@@ -1,13 +1,14 @@
 // src/screens/FinalResultsScreen.js
-import React from "react";
+import React, { useEffect } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   ImageBackground,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { playSfx } from "../audio/soundManager";
 import { useGame } from "../context/GameContext";
 
 export default function FinalResultsScreen({ navigation }) {
@@ -18,6 +19,9 @@ export default function FinalResultsScreen({ navigation }) {
     totalRounds,
     startSinglePlayer,
     difficulty,
+    computePlayerStats,
+    soundEnabled,
+    vibrationEnabled,
   } = useGame();
 
   const handleBackHome = () => {
@@ -29,11 +33,15 @@ export default function FinalResultsScreen({ navigation }) {
   };
 
   const handlePlayAgain = () => {
-    // Nueva partida, misma lógica de 1 jugador vs CPUs, desde la pantalla de setup
     resetGame();
+
+    // Dejamos Home como raíz y SinglePlayerSetup encima
     navigation.reset({
-      index: 0,
-      routes: [{ name: "SinglePlayerSetup" }],
+      index: 1,
+      routes: [
+        { name: "Home" },
+        { name: "SinglePlayerSetup" },
+      ],
     });
   };
 
@@ -63,9 +71,13 @@ export default function FinalResultsScreen({ navigation }) {
       numBots: botCount,
     });
 
+    // Igual que con "Jugar de nuevo": mantenemos Home en el stack
     navigation.reset({
-      index: 0,
-      routes: [{ name: "RoundIntro" }],
+      index: 1,
+      routes: [
+        { name: "Home" },
+        { name: "RoundIntro" },
+      ],
     });
   };
 
@@ -93,6 +105,7 @@ export default function FinalResultsScreen({ navigation }) {
     );
   }
 
+  // --- Cálculos de stats y ganador ---
   const statsByPlayer = computePlayerStats(players, roundHistory);
   const sorted = [...players].sort((a, b) =>
     comparePlayersWithTiebreakers(a, b, statsByPlayer)
@@ -112,13 +125,14 @@ export default function FinalResultsScreen({ navigation }) {
     sorted.length > 1 ? winner.score - sorted[1].score : 0;
 
   const humanStats = statsByPlayer[human.id] || {
+    total: 0,
     roundsWon: 0,
     bestRoundScore: 0,
     correctAnswers: 0,
     emptyAnswers: 0,
   };
 
-  // Mensaje principal (sin explicar Sudden ni “puedes intentar…”)
+  // Mensaje principal
   let mainTitle = "Resultados finales";
   let mainSubtitle = "";
   let icon = "🏆";
@@ -136,6 +150,22 @@ export default function FinalResultsScreen({ navigation }) {
     mainTitle = "Las CPUs ganaron";
     mainSubtitle = "Quedaste por debajo en el marcador.";
   }
+
+  // 🔊 SFX de victoria / derrota al entrar a la pantalla final
+  useEffect(() => {
+    if (!soundEnabled) return;
+
+    if (isTieForFirst) {
+      // Si quieres, aquí podríamos reproducir algún SFX neutro
+      return;
+    }
+
+    const sfxName = isHumanWinner ? "gameWin" : "roundLose";
+    playSfx(sfxName, {
+      enabled: soundEnabled,
+      vibration: vibrationEnabled,
+    });
+  }, [isTieForFirst, isHumanWinner, soundEnabled, vibrationEnabled]);
 
   return (
     <ImageBackground
@@ -235,6 +265,7 @@ export default function FinalResultsScreen({ navigation }) {
             >
               {sorted.map((p, index) => {
                 const stats = statsByPlayer[p.id] || {
+                  total: 0,
                   roundsWon: 0,
                   bestRoundScore: 0,
                   correctAnswers: 0,
@@ -317,74 +348,6 @@ export default function FinalResultsScreen({ navigation }) {
       </View>
     </ImageBackground>
   );
-}
-
-/**
- * Calcula, para cada jugador:
- * - rondas ganadas
- * - mejor puntaje de ronda
- * - respuestas correctas
- * - casillas vacías
- */
-function computePlayerStats(players, roundHistory) {
-  const stats = {};
-  players.forEach((p) => {
-    stats[p.id] = {
-      roundsWon: 0,
-      bestRoundScore: 0,
-      correctAnswers: 0,
-      emptyAnswers: 0,
-    };
-  });
-
-  roundHistory.forEach((round) => {
-    if (!round || !Array.isArray(round.perPlayer)) return;
-    const perPlayer = round.perPlayer;
-
-    const maxRoundScore = perPlayer.reduce((max, r) => {
-      const rs =
-        typeof r.roundScore === "number" ? r.roundScore : 0;
-      return rs > max ? rs : max;
-    }, 0);
-
-    perPlayer.forEach((r) => {
-      const s = stats[r.playerId];
-      if (!s) return;
-
-      const roundScore =
-        typeof r.roundScore === "number" ? r.roundScore : 0;
-
-      if (roundScore > s.bestRoundScore) {
-        s.bestRoundScore = roundScore;
-      }
-
-      if (roundScore === maxRoundScore && maxRoundScore > 0) {
-        s.roundsWon += 1;
-      }
-
-      if (r.perCategoryScore && typeof r.perCategoryScore === "object") {
-        Object.values(r.perCategoryScore).forEach((entry) => {
-          const points =
-            entry && typeof entry.points === "number"
-              ? entry.points
-              : 0;
-          const rawAnswer =
-            entry && typeof entry.answer === "string"
-              ? entry.answer
-              : "";
-          const trimmed = rawAnswer.trim();
-
-          if (trimmed.length === 0) {
-            s.emptyAnswers += 1;
-          } else if (points > 0) {
-            s.correctAnswers += 1;
-          }
-        });
-      }
-    });
-  });
-
-  return stats;
 }
 
 /**
@@ -485,11 +448,10 @@ const styles = StyleSheet.create({
     color: "#4b5563",
   },
 
-  // Glass dark card del ganador
   winnerCard: {
     borderRadius: 20,
     padding: 16,
-    backgroundColor: "rgba(15,23,42,0.65)", // glass oscuro
+    backgroundColor: "rgba(15,23,42,0.65)",
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.8)",
     marginBottom: 14,
@@ -628,7 +590,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-  // Ahora con color sólido para "Volver al inicio"
   btnSecondary: {
     paddingVertical: 13,
     borderRadius: 999,

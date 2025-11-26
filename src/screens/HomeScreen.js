@@ -11,14 +11,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useGame } from "../context/GameContext";
 import TutorialModal from "../components/TutorialModal";
-import SettingsModal from "../components/SettingsModal"; // 👈 asegúrate de tener este componente
+import SettingsModal from "../components/SettingsModal";
 
 const backgroundImage = require("../../assets/images/bg-home.png");
-
-// Botón grande central
 const playButtonImage = require("../../assets/images/home-play-button.png");
-
-// Botones inferiores (sin funcionalidad por ahora)
 const footerInfoImage = require("../../assets/images/home-footer-info.png");
 const footerModesImage = require("../../assets/images/home-footer-modes.png");
 const footerSettingsImage = require("../../assets/images/home-footer-settings.png");
@@ -36,9 +32,10 @@ function HomeScreen({ navigation }) {
     toggleVibration,
   } = useGame();
 
+  // 👇 SOLO una vez al montar
   useEffect(() => {
     resetGame();
-  }, [resetGame]);
+  }, []); // <- importante: array vacío
 
   const handlePressIn = () => setIsPressed(true);
   const handlePressOut = () => setIsPressed(false);
@@ -66,7 +63,6 @@ function HomeScreen({ navigation }) {
             activeOpacity={0.9}
             onPress={() => setShowSettings(true)}
           >
-            {/* 👇 aquí cambiamos el icono a ⚙️ */}
             <Text style={styles.settingsButtonText}>⚙️</Text>
           </TouchableOpacity>
 
@@ -96,14 +92,11 @@ function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Footer con 3 botones grandes (placeholder, luego les pones navegación) */}
+          {/* Footer con 3 botones grandes */}
           <View style={styles.footer}>
-            {/* Izquierda */}
             <TouchableOpacity
               activeOpacity={0.9}
-              onPress={() => {
-                // Futuro: navegación a "Store" o similar
-              }}
+              onPress={() => {}}
               style={[styles.footerButtonWrapper, styles.footerButtonWrapperLeft]}
             >
               <Image
@@ -113,12 +106,9 @@ function HomeScreen({ navigation }) {
               />
             </TouchableOpacity>
 
-            {/* Centro */}
             <TouchableOpacity
               activeOpacity={0.9}
-              onPress={() => {
-                // Futuro: navegación a "GameModes"
-              }}
+              onPress={() => {}}
               style={[
                 styles.footerButtonWrapper,
                 styles.footerButtonWrapperCenter,
@@ -131,12 +121,9 @@ function HomeScreen({ navigation }) {
               />
             </TouchableOpacity>
 
-            {/* Derecha */}
             <TouchableOpacity
               activeOpacity={0.9}
-              onPress={() => {
-                // Futuro: navegación a "Friends"
-              }}
+              onPress={() => {}}
               style={[
                 styles.footerButtonWrapper,
                 styles.footerButtonWrapperRight,
@@ -172,15 +159,9 @@ function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  bg: {
-    flex: 1,
-  },
-  bgImage: {
-    resizeMode: "cover",
-  },
-  safeArea: {
-    flex: 1,
-  },
+  bg: { flex: 1 },
+  bgImage: { resizeMode: "cover" },
+  safeArea: { flex: 1 },
   overlay: {
     flex: 1,
     paddingHorizontal: 24,
@@ -188,7 +169,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  // 🔹 Botón flotante de ayuda (?)
   helpButton: {
     position: "absolute",
     top: 20,
@@ -207,7 +187,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  // 🔹 Botón flotante de Settings (derecha)
   settingsButton: {
     position: "absolute",
     top: 20,
@@ -226,9 +205,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  header: {
-    alignItems: "center",
-  },
+  header: { alignItems: "center" },
   appName: {
     fontSize: 36,
     fontWeight: "900",
@@ -253,7 +230,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   playButtonWrapper: {
     width: "100%",
     maxWidth: 420,
@@ -276,7 +252,6 @@ const styles = StyleSheet.create({
     height: 440,
   },
 
-  // 🔻 FOOTER
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -285,7 +260,6 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     transform: [{ translateY: 37 }],
   },
-
   footerButtonWrapper: {
     flex: 1,
     alignItems: "center",
@@ -299,19 +273,9 @@ const styles = StyleSheet.create({
   footerButtonWrapperRight: {
     transform: [{ translateY: 7 }, { translateX: 25 }],
   },
-
-  footerIconLeft: {
-    width: 73,
-    height: 73,
-  },
-  footerIconCenter: {
-    width: 98,
-    height: 98,
-  },
-  footerIconRight: {
-    width: 150,
-    height: 150,
-  },
+  footerIconLeft: { width: 73, height: 73 },
+  footerIconCenter: { width: 98, height: 98 },
+  footerIconRight: { width: 150, height: 150 },
 });
 
 export default HomeScreen;

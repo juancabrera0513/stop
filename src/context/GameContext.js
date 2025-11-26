@@ -1,8 +1,8 @@
 // src/context/GameContext.js
-import React, { createContext, useContext, useState, useMemo } from "react";
-import { generateLetter, scoreRound } from "../logic/gameEngine";
+import React, { createContext, useContext, useMemo, useState } from "react";
+import { playMusic, playSfx, stopMusic } from "../audio/soundManager";
 import { generateBotAnswers, getBotStopDelay } from "../logic/aiBot";
-import { playSfx, playMusic, stopMusic } from "../audio/soundManager";
+import { generateLetter, scoreRound } from "../logic/gameEngine";
 
 const GameContext = createContext(null);
 
@@ -10,14 +10,13 @@ const GameContext = createContext(null);
 const ROUND_TIME_LIMIT = 45;
 
 export function GameProvider({ children }) {
-  // modo de juego: por ahora solo "single" (1 vs CPUs)
   const [mode, setMode] = useState(null); // "single" | null
 
   const [player, setPlayer] = useState(null); // humano
   const [bots, setBots] = useState([]); // varios CPU
   const [players, setPlayers] = useState([]); // [player, ...bots]
 
-  const [difficulty, setDifficulty] = useState("easy"); // "easy" | "medium" | "hard"
+  const [difficulty, setDifficulty] = useState("easy");
   const [roundNumber, setRoundNumber] = useState(0);
   const [totalRounds, setTotalRounds] = useState(5);
   const [currentLetter, setCurrentLetter] = useState(null);
@@ -25,22 +24,36 @@ export function GameProvider({ children }) {
   const [roundHistory, setRoundHistory] = useState([]);
   const [stage, setStage] = useState("idle"); // "idle" | "playing" | "roundResults" | "finished"
 
-  // tiempo planificado para que (al menos un) bot diga STOP en esta ronda (segundos)
   const [botStopAfter, setBotStopAfter] = useState(null);
-
-  // 💡 Para no romper Lobby/CreateRoom, dejamos un estado simple de sala local
   const [localRoom, setLocalRoom] = useState(null);
 
-  // 🎚 Settings globales
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [vibrationEnabled, setVibrationEnabled] = useState(true);
+const [vibrationEnabled, setVibrationEnabled] = useState(true);
 
-  const toggleSound = () => setSoundEnabled((prev) => !prev);
+const toggleSound = () => {
+  setSoundEnabled((prev) => {
+    const next = !prev;
+
+    if (!next) {
+      // 🔇 Se está APAGANDO el sonido → paramos cualquier música
+      stopMusic();
+    } else {
+      // 🔊 Se está ENCENDIENDO otra vez
+      // Dependiendo de en qué estado esté el juego, decidimos qué música poner
+      if (stage === "idle" || stage === "finished") {
+        playMusic("menu", { enabled: true, loop: true });
+      } else if (stage === "playing") {
+        playMusic("round", { enabled: true, loop: true });
+      }
+      // Si estuvieras en otra pantalla especial, podrías ajustar aquí
+    }
+
+    return next;
+  });
+};
+
   const toggleVibration = () => setVibrationEnabled((prev) => !prev);
 
-  /**
-   * 🔹 CATEGORÍAS POR DEFECTO
-   */
   const categories = useMemo(
     () => [
       "Nombre",
@@ -54,9 +67,6 @@ export function GameProvider({ children }) {
     []
   );
 
-  /**
-   * 🧠 Helper: factor de velocidad base por dificultad (mismo criterio que en aiBot)
-   */
   function getDifficultySpeedMultiplier(d) {
     if (d === "hard") return 1.15;
     if (d === "medium") return 1.0;
@@ -64,14 +74,15 @@ export function GameProvider({ children }) {
   }
 
   /**
-   * 🧠 Helper interno: prepara una ronda concreta
+   * 🔁 PREPARAR RONDA
+   *   👉 OJO: aquí YA NO se llama playMusic("round")
+   *   La música de ronda la controla GameScreen.
    */
   const setupRound = (roundIndex, diffOverride) => {
     const activeDifficulty = diffOverride || difficulty;
 
     const letter = generateLetter();
 
-    // calcular en cuántos segundos (aprox) el bot más rápido intentará decir STOP
     const botDelay = getBotStopDelay(
       letter,
       categories,
@@ -84,19 +95,9 @@ export function GameProvider({ children }) {
     setCurrentAnswers({});
     setStage("playing");
     setBotStopAfter(botDelay);
-
-    // 🎵 Música de ronda
-    playMusic("round", { enabled: soundEnabled, loop: true });
-    // 🔊 SFX inicio de ronda
-    playSfx("roundStart", {
-      enabled: soundEnabled,
-      vibration: vibrationEnabled,
-    });
+    // ❌ ANTES aquí estaba playMusic("round"); ahora NO.
   };
 
-  /**
-   * Iniciar modo 1 jugador vs CPU(s)
-   */
   const startSinglePlayer = ({
     playerName,
     rounds,
@@ -107,8 +108,6 @@ export function GameProvider({ children }) {
       playerName && playerName.trim().length > 0 ? playerName.trim() : "Tú";
 
     const diff = difficultyLevel || "easy";
-
-    // 🔸 Número de bots (si no se pasa, dejamos 1 por ahora)
     const botsCount = numBots && numBots > 0 ? numBots : 1;
 
     const human = {
@@ -118,8 +117,7 @@ export function GameProvider({ children }) {
       isBot: false,
     };
 
-    // Creamos N bots con pequeños cambios de velocidad
-    const speedProfiles = [1.15, 1.0, 0.85]; // rápido, normal, lento (para los 3 primeros)
+    const speedProfiles = [1.15, 1.0, 0.85];
     const botPlayers = Array.from({ length: botsCount }).map((_, index) => {
       const idx = index + 1;
 
@@ -131,7 +129,7 @@ export function GameProvider({ children }) {
           : "CPU Fácil";
 
       const speedMultiplier =
-        speedProfiles[index] || (0.8 + Math.random() * 0.6); // 0.8–1.4 para extras
+        speedProfiles[index] || (0.8 + Math.random() * 0.6);
 
       return {
         id: `bot-${idx}`,
@@ -154,11 +152,9 @@ export function GameProvider({ children }) {
     setStage("idle");
     setBotStopAfter(null);
 
-    // 🚀 Siempre empezamos la nueva partida en RONDA 1
     setupRound(1, diff);
   };
 
-  // Siguiente ronda dentro de la misma partida
   const startNextRound = () => {
     const nextRound = roundNumber + 1;
     setupRound(nextRound);
@@ -171,9 +167,6 @@ export function GameProvider({ children }) {
     }));
   };
 
-  /**
-   * Calcula un speedFactor para un bot dado
-   */
   function getBotSpeedFactor(botPlayer, stoppedBy) {
     const diff = botPlayer.difficulty || difficulty;
     const diffSpeed = getDifficultySpeedMultiplier(diff);
@@ -182,16 +175,16 @@ export function GameProvider({ children }) {
     let stopProgress;
 
     if (stoppedBy === "human") {
-      stopProgress = 0.3 + Math.random() * 0.4; // 0.3–0.7
+      stopProgress = 0.3 + Math.random() * 0.4;
     } else if (stoppedBy === "bot") {
-      stopProgress = 0.6 + Math.random() * 0.35; // 0.6–0.95
+      stopProgress = 0.6 + Math.random() * 0.35;
     } else if (stoppedBy === "time") {
       stopProgress = 1.0;
     } else {
       stopProgress = 0.8;
     }
 
-    const jitter = 0.9 + Math.random() * 0.3; // 0.9–1.2
+    const jitter = 0.9 + Math.random() * 0.3;
 
     let speedFactor = baseSpeed * diffSpeed * stopProgress * jitter;
 
@@ -201,14 +194,10 @@ export function GameProvider({ children }) {
     return speedFactor;
   }
 
-  /**
-   * STOP: puede venir del humano, de un bot o del fin de tiempo.
-   */
   const pressStop = (stoppedBy = "human") => {
     if (stage !== "playing") return;
     if (!currentLetter || !player || bots.length === 0) return;
 
-    // 🔊 Sonidos dependiendo de quién dijo STOP
     if (stoppedBy === "human") {
       playSfx("stopHuman", {
         enabled: soundEnabled,
@@ -223,14 +212,12 @@ export function GameProvider({ children }) {
 
     const playersWithAnswers = players.map((p) => {
       if (!p.isBot) {
-        // Jugador humano → usamos currentAnswers tal cual
         return {
           ...p,
           tempAnswers: currentAnswers,
         };
       }
 
-      // Bot: calculamos su velocidad específica para ESTA ronda
       const speedFactor = getBotSpeedFactor(p, stoppedBy);
       const botAnswers = generateBotAnswers(
         currentLetter,
@@ -263,16 +250,11 @@ export function GameProvider({ children }) {
     setPlayers(scoredPlayers);
     setRoundHistory((prev) => [...prev, resultWithStop]);
     setStage("roundResults");
-
-    // Música del menú si ya terminó la partida (se puede ajustar)
-    // Aquí podríamos cambiar música según si terminó o no.
   };
 
   const goFromRoundResults = () => {
     if (roundNumber >= totalRounds) {
       setStage("finished");
-      // Puedes poner aquí win/lose según comparación
-      // y reproducir SFX win/lose y música de menú
       stopMusic();
       playMusic("menu", { enabled: soundEnabled, loop: true });
     } else {
@@ -295,12 +277,10 @@ export function GameProvider({ children }) {
     setBotStopAfter(null);
     setLocalRoom(null);
 
-    // Volvemos a música de menú cuando "reseteas"
     stopMusic();
     playMusic("menu", { enabled: soundEnabled, loop: true });
   };
 
-  // 🔹 Stubs simples para Lobby/CreateRoom
   const createLocalRoom = ({ rounds, players: localPlayers }) => {
     setLocalRoom({
       id: "local-room-1",
@@ -313,13 +293,63 @@ export function GameProvider({ children }) {
     });
   };
 
-  const startLocalGame = () => {
-    // Futuro: modo local
-  };
-
+  const startLocalGame = () => {};
   const resetLocalRoom = () => {
     setLocalRoom(null);
   };
+
+  // Stats simples: puntaje total por jugador (lo dejé como lo tenías)
+  function computePlayerStats(playersList, history) {
+    const totals = {};
+    const safePlayers = Array.isArray(playersList) ? playersList : [];
+    const safeHistory = Array.isArray(history) ? history : [];
+
+    safePlayers.forEach((p) => {
+      if (!p || !p.id) return;
+      totals[p.id] = { total: 0 };
+    });
+
+    safeHistory.forEach((round) => {
+      if (!round || !round.perPlayer) return;
+      const per = round.perPlayer;
+
+      if (Array.isArray(per)) {
+        per.forEach((entry) => {
+          if (!entry || !entry.playerId) return;
+          const playerId = entry.playerId;
+          const pts =
+            typeof entry.roundScore === "number" ? entry.roundScore : 0;
+
+          if (!totals[playerId]) {
+            totals[playerId] = { total: 0 };
+          }
+          totals[playerId].total += pts;
+        });
+      } else {
+        Object.keys(per).forEach((playerId) => {
+          const data = per[playerId];
+          const pts =
+            data && typeof data.roundScore === "number"
+              ? data.roundScore
+              : 0;
+
+          if (!totals[playerId]) {
+            totals[playerId] = { total: 0 };
+          }
+          totals[playerId].total += pts;
+        });
+      }
+    });
+
+    safePlayers.forEach((p) => {
+      if (!p || !p.id) return;
+      if (!totals[p.id]) {
+        totals[p.id] = { total: 0 };
+      }
+    });
+
+    return totals;
+  }
 
   const value = {
     mode,
@@ -338,12 +368,10 @@ export function GameProvider({ children }) {
     roundTimeLimit: ROUND_TIME_LIMIT,
     botStopAfter,
     localRoom,
-    // settings
     soundEnabled,
     vibrationEnabled,
     toggleSound,
     toggleVibration,
-    // acciones
     startSinglePlayer,
     updateAnswer,
     pressStop,
@@ -352,6 +380,7 @@ export function GameProvider({ children }) {
     createLocalRoom,
     startLocalGame,
     resetLocalRoom,
+    computePlayerStats,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
